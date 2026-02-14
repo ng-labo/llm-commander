@@ -16,9 +16,9 @@ import os.path, json, sys, time, re
 
 
 global_settings = {}
-global_settings["coding-model"] = "openai/gpt-5.1-codex-mini"
+global_settings["coding-model"] = ("openai/gpt-5.1-codex-mini",)
 #global_settings["general-model"] = "gpt-oss:120b"
-global_settings["general-model"] = "openai/gpt-4o-mini"
+global_settings["general-model"] = ("openai/gpt-4o-mini", "gemma3:27b", "deepseek-v3.2", "glm-5", "google/gemini-2.5-flash-lite",)
 
 coding_prompt = {}
 coding_prompt["python2"] = """Python 2.7のレガシー環境向けコード生成器、Python 3の構文・標準ライブラリは使用禁止。"""
@@ -58,7 +58,7 @@ user_history = UserHistory()
 
 
 #####################
-# ollama
+# ollama, openrouter.ai
 #####################
 from utils import perform, ollamalist
 
@@ -87,7 +87,9 @@ from prompt_toolkit.layout.dimension import Dimension as D
 from prompt_toolkit.layout.controls import FormattedTextControl
 
 class InternalCache:
-    show_list = True  # リストを表示するかどうかのフラグ
+    # background-processの状態
+    background_stream_alive = True
+
     # input-area
     history = []
     index = 0
@@ -95,6 +97,7 @@ class InternalCache:
 
     # list-area
     list_area_Y = 0
+    show_list = True # list_area を表示するかどうかのフラグ
 
     # log-area
     log_area_Y = 0
@@ -102,7 +105,7 @@ class InternalCache:
     # popup status
     popup_active = False
 
-    model = global_settings["coding-model"]
+    model = global_settings["coding-model"][0]
 
     code_language = "python"
 
@@ -110,7 +113,8 @@ class InternalCache:
         pass
 
     def set_model(self, m):
-        self.model = m 
+        if m in global_settings["coding-model"] or m in global_settings["general-model"]:
+            self.model = m
 
     def set_lang(self, l):
         self.code_language = l
@@ -129,7 +133,10 @@ log_area = TextArea(
 
 # for small information
 def ready_status():
-    return f"{_C.code_language}, {_C.model} ...Ready"
+    if _C.model in global_settings["coding-model"]:
+        return f"{_C.model} with {_C.code_language} ...Ready"
+
+    return f"{_C.model} ...Ready"
     
 status = Label(text=ready_status(), dont_extend_height=True)
 
@@ -177,11 +184,6 @@ root_container = VSplit(
     padding=1,
 )
 
-root_container_2 = VSplit(
-    [ HSplit([frames['status'], frames['input_area']], width=80), frames['log_area'], ],
-    padding=1,
-)
-
 from prompt_toolkit.application.current import get_app
 def get_frame_height(frame_widget):
     app = get_app()
@@ -225,12 +227,10 @@ def show_popup(event):
     event.app.layout.focus(popup_window)
 
 
-background_stream_alive = True
 @kb.add("c-q")
 def _(event):
     """Ctrl-Q to exit cleanly."""
-    global background_stream_alive
-    background_stream_alive = False
+    _C.background_stream_alive = False
     time.sleep(0.1)
     event.app.exit()
 
@@ -341,7 +341,12 @@ def _(event):
 
 @kb.add("c-n")
 def _(event):
-    _C.set_model(_C.model == global_settings["coding-model"] and global_settings["general-model"] or global_settings["coding-model"])
+    availables = global_settings["coding-model"] + global_settings["general-model"]
+    i = availables.index(_C.model)
+    i += 1
+    if len(availables) == i:
+        i = 0
+    _C.set_model(availables[i])
     status.text = ready_status()
 
 @kb.add("c-t")
@@ -381,11 +386,6 @@ def append_log(text: str):
 
 
 async def handle_input(text: str):
-    global background_stream_alive
-    """
-    Example handler: recognize a few commands, or simulate streaming output.
-    Replace/extend this to call actual local logic / external processes.
-    """
     status.text = " Processing... "
     # built-in commands
     if text == "help":
@@ -401,7 +401,7 @@ async def handle_input(text: str):
         input_area.text = ""
 
     elif text == "exit":
-        background_stream_alive = False
+        _C.background_stream_alive = False
         append_log("Bye.")
         await asyncio.sleep(0.1)
         app.exit()
@@ -435,7 +435,6 @@ async def handle_input(text: str):
                 model = m
                 break
         content = text[len(args[0])+1:].strip()
-        #append_log(f"Q:{content}")
         params = {'content': content}
         if model:
             params['model'] = model
@@ -446,7 +445,7 @@ async def handle_input(text: str):
         content = text.strip()
         params = {'content': content}
         params['model'] = _C.model
-        if _C.model == global_settings['general-model']:
+        if _C.model in global_settings['general-model']:
             # 普通の質問
             pass
         else:
@@ -456,7 +455,6 @@ async def handle_input(text: str):
             else:
                 params['system'] = f'{_C.code_language} コード生成器として、回答となるコードのみを出力してください。'
         result = await asyncio.to_thread(perform, params)
-        #append_log(result['content'])
         log_area.text = result['content']
         _C.last_model = _C.model
 
@@ -474,15 +472,13 @@ app = Application(layout=layout, key_bindings=kb, full_screen=True, style=style)
 # --- Optional: background task that injects periodic messages (simulates external streams) ---
 import threading
 def background_task():
-    global background_stream_alive
     i = 0
-    #append_log(f"[bg] in background_task {background_stream_alive}")
-    while background_stream_alive:
+    while _C.background_stream_alive:
         for _ in range(100):
             time.sleep(0.1)
-            if not background_stream_alive:
+            if not _C.background_stream_alive:
                 break
-        if not background_stream_alive:
+        if not _C.background_stream_alive:
             break
         i += 1
         #append_log(f"[bg] heartbeat {i}")
