@@ -80,9 +80,14 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.styles import Style
 from prompt_toolkit.completion import Completer, Completion
 
+from prompt_toolkit.layout import ConditionalContainer
+from prompt_toolkit.filters import Condition
+from prompt_toolkit.layout.dimension import Dimension as D
+
 from prompt_toolkit.layout.controls import FormattedTextControl
 
 class InternalCache:
+    show_list = True  # リストを表示するかどうかのフラグ
     # input-area
     history = []
     index = 0
@@ -130,7 +135,7 @@ status = Label(text=ready_status(), dont_extend_height=True)
 
 # for user input
 input_area = TextArea(
-    height=6,
+    height=D(min=6),
     prompt="> ",
     multiline=True,
     wrap_lines=True,
@@ -164,7 +169,7 @@ frames['status'] = Frame(status, title="Status")
 frames['input_area'] = Frame(input_area, title="Input (Enter=newline, Control+J=send)")
 frames['list_area'] = Frame(list_area, title="List")
 root_container = VSplit(
-    [ HSplit([frames['status'], frames['input_area'], frames['list_area']], width=80),
+    [ HSplit([frames['status'], frames['input_area'], ConditionalContainer( content=frames['list_area'], filter=Condition(lambda: _C.show_list)),], width=80),
       frames['log_area'], ],
     #  Frame(log_area, title="Log / Output", width=80),
     #  HSplit([Frame(status, title="Status"), Frame(input_area, title="Input (Enter=newline, Control+J=send)")], padding=1),
@@ -351,10 +356,9 @@ def _(event):
 
 @kb.add("c-p")
 def _(event):
-    frames['input_area'].height = None
-    input_area.height = None
-    event.app.layout.container = root_container_2
-    event.app.layout.focus(input_area)
+    """リスト表示をトグル（切り替え）する"""
+    _C.show_list = not _C.show_list
+    # コンテナ全体の再描画を促す
     get_app().invalidate()
 
 
