@@ -32,8 +32,8 @@ class UserHistory:
     def __init__(self):
         self.user_log = []
 
-        if os.path.exists(self.LOG_FILE):
-            with open(self.LOG_FILE) as f:
+        if os.path.exists(LOG_FILE):
+            with open(LOG_FILE) as f:
                 self.user_log = json.load(f)
 
     def user_log(self):
@@ -43,7 +43,7 @@ class UserHistory:
         return self.user_log[i].get('answer') and self.user_log[i]['answer'] or ''
 
     def save(self):
-        with open(self.LOG_FILE, 'w') as f:
+        with open(LOG_FILE, 'w') as f:
             json.dump(self.user_log, f)
 
     def append(self, query, text, model):
