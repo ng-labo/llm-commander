@@ -12,6 +12,11 @@ default_model = 'gpt-oss:120b'
 
 from myid import OLLAMA_APIKEY
 
+CODING_MODELS = ("openai/gpt-5.1-codex-mini",)
+GENERAL_MODELS = ("openai/gpt-4o-mini", "google/gemini-2.5-flash-lite", "gemma3:27b", "deepseek-v3.2", "glm-5",)
+
+OPENROUTERAI_MODELS = (CODING_MODELS[0], GENERAL_MODELS[0], GENERAL_MODELS[1],)
+
 THINKING_MODELS = ('gpt-oss:20b', 'gpt-oss:120b', 'deepseek-v3.1:671b',)
 
 chat_system_prompt = '日本語で流暢に答えてください。リラックスした雰囲気の話し方をしてください。'
@@ -171,7 +176,7 @@ def perform(args):
         if args.get("top_p"):
             kw['top_p'] =  args["top_p"]
 
-        if model in ('openai/gpt-5.1-codex-mini', 'openai/gpt-4o-mini'):
+        if model in CODING_MODELS or model in GENERAL_MODELS:
             pass
             
         elif model not in enable_models:
@@ -179,7 +184,7 @@ def perform(args):
             model = cands and cands[0] or default_model
             if model == default_model: print("fall back to", model)
 
-        if model in ('openai/gpt-5.1-codex-mini', 'openai/gpt-4o-mini'):
+        if model in OPENROUTERAI_MODELS:
             res = openrouterai_invoke(model, content, messages, **kw)
 
         elif system:

@@ -14,11 +14,12 @@ Simple terminal console base using prompt_toolkit.
 
 import os.path, json, sys, time, re
 
+from utils import CODING_MODELS, GENERAL_MODELS
 
 global_settings = {}
-global_settings["coding-model"] = ("openai/gpt-5.1-codex-mini",)
+global_settings["coding-model"] = CODING_MODELS
 #global_settings["general-model"] = "gpt-oss:120b"
-global_settings["general-model"] = ("openai/gpt-4o-mini", "gemma3:27b", "deepseek-v3.2", "glm-5", "google/gemini-2.5-flash-lite",)
+global_settings["general-model"] = GENERAL_MODELS
 
 coding_prompt = {}
 coding_prompt["python2"] = """Python 2.7のレガシー環境向けコード生成器、Python 3の構文・標準ライブラリは使用禁止。"""
@@ -237,9 +238,8 @@ def _(event):
 
 @kb.add("c-l")
 def _(event):
-    """Ctrl-L clear log."""
-    log_area.text = ""
-    status.text = " Cleared log "
+    """Ctrl-L clear input-field."""
+    input_area.text = ""
 
 
 #@kb.add("enter")
@@ -263,7 +263,14 @@ def _(event):
 @kb.add("c-c")
 def _(event):
     """Ctrl-C to copy text to clip-buffer."""
-    cbcopy(log_area.text)
+    if event.app.layout.has_focus(frames['log_area']) and log_area.text:
+        cbcopy(log_area.text)
+    elif event.app.layout.has_focus(frames['input_area']) and input_area.text:
+        cbcopy(input_area.text)
+    elif event.app.layout.has_focus(frames['list_area']):
+        queries_list = user_history.get_query_all()
+        input_area.text = queries_list[_C.list_area_Y]
+        log_area.text = user_history.answer(_C.list_area_Y)
 
 
 @kb.add("c-s")
@@ -271,7 +278,8 @@ def _(event):
     """Ctrl-S to save question-answer into file."""
     if event.app.layout.has_focus(frames['input_area']):
         if input_area.text and log_area.text:
-            user_history.append(input_area.text, log_area.text, _C.last_model)
+            user_history.append(input_area.text.strip(), log_area.text.strip(), _C.last_model)
+            list_area.text = "\n".join(user_history.get_query_all())
 
 
 @kb.add("up")
@@ -390,10 +398,11 @@ async def handle_input(text: str):
     # built-in commands
     if text == "help":
         append_log("Commands: help, clear, exit")
-        append_log("ctrl+c: copy log buffer into clipboard")
+        append_log("ctrl+c: copy input or buffer into clipboard")
         append_log("ctrl+m: change model")
         append_log("ctrl+t: replace text in input-area")
         append_log("ctrl+s: save query-answer")
+        append_log("ctrl+l: clear input-area")
         append_log(">language change coding language")
 
     elif text == "clear":
